@@ -8,10 +8,14 @@ import { RegisterDto } from './dto/register.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async register(dto: RegisterDto) {
     const userExist = await this.prisma.user.findUnique({
@@ -25,10 +29,21 @@ export class AuthService {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(dto.password, saltRounds);
 
+    const defaultRole = await this.prisma.role.findFirst({
+      where: { name: 'Author' },
+    });
+
     const newUser = await this.prisma.user.create({
       data: {
         email: dto.email,
         password: hashedPassword,
+        roles: defaultRole
+          ? {
+              create: {
+                roleId: defaultRole.id,
+              },
+            }
+          : undefined,
       },
       select: {
         id: true,
@@ -38,7 +53,7 @@ export class AuthService {
     });
 
     return {
-      message: 'Sign up successfully!',
+      message: 'Sign up successfully! Welcome new Author',
       user: newUser,
     };
   }
@@ -47,7 +62,19 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       include: {
-        roles: true,
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -61,11 +88,51 @@ export class AuthService {
       throw new UnauthorizedException('Incorrect Password, please try again!');
     }
 
-    const { password, ...result } = user;
+    const permissionSet = new Set<string>();
+    const roleNames: string[] = [];
+
+    if (user.roles) {
+      for (const userRole of user.roles) {
+        if (userRole.role) {
+          roleNames.push(userRole.role.name);
+
+          if (userRole.role.permissions) {
+            for (const rolePerm of userRole.role.permissions) {
+              if (rolePerm.permission?.code) {
+                permissionSet.add(rolePerm.permission.code);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Chuyển Set về mảng chuỗi phẳng: ['post:create', 'post:update']
+    const permissions = Array.from(permissionSet);
+
+    // Lấy tên vai trò chính (hoặc gom thành chuỗi/mảng tùy Mikey, ở đây lấy cái đầu tiên hoặc mặc định)
+    const primaryRole = roleNames.length > 0 ? roleNames[0] : null;
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: primaryRole,
+      permissions: permissions,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    const { password, ...userWithoutPassword } = user;
 
     return {
       message: 'Login Successfully!',
-      user: result,
+      access_token: accessToken,
+      user: {
+        id: userWithoutPassword.id,
+        email: userWithoutPassword.email,
+        roles: roleNames,
+        permissions: permissions,
+      },
     };
   }
 }

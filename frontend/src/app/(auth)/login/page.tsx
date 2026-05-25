@@ -31,8 +31,8 @@ import {
 
 // Initialize Validation Schema for Login by Zod
 const loginSchema = z.object({
-  email: z.string().email("Email chưa đúng cấu trúc rồi Mikey ơi!"),
-  password: z.string().min(1, "Mật khẩu không được để trống nha!"),
+  email: z.string().email("Invalid Email format"),
+  password: z.string().min(1, "Password cannot leave blank"),
 });
 
 type LoginFormInputs = z.infer<typeof loginSchema>;

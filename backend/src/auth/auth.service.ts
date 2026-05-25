@@ -110,7 +110,7 @@ export class AuthService {
     // Chuyển Set về mảng chuỗi phẳng: ['post:create', 'post:update']
     const permissions = Array.from(permissionSet);
 
-    // Lấy tên vai trò chính (hoặc gom thành chuỗi/mảng tùy Mikey, ở đây lấy cái đầu tiên hoặc mặc định)
+    // Lấy tên vai trò chính (Vai trò đứng đầu trong bảng userRoles)
     const primaryRole = roleNames.length > 0 ? roleNames[0] : null;
 
     const payload = {

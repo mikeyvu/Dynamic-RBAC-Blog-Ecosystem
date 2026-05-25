@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
-// 🌟 THÊM INTERFACE: Định nghĩa đúng cấu trúc Object mà JwtStrategy.validate() trả về
+// Define object structure that JwtStrategy.validate() return
 interface AuthenticatedUser {
   userId: number;
   email: string;
@@ -11,25 +11,24 @@ interface AuthenticatedUser {
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  // Định kiểu cho các tham số đầu vào để loại bỏ hoàn toàn chữ `any` bừa bãi
+  //Define input type to avoid any type
   handleRequest<TUser = AuthenticatedUser>(
     err: unknown,
     user: TUser | false,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     info: unknown,
   ): TUser {
-    // Nếu có lỗi hệ thống hoặc Passport không bốc được user (trả về false)
+    // If system error or Passport cannot get user -> return false
     if (err || !user) {
       if (err instanceof Error) {
         throw err;
       }
 
       throw new UnauthorizedException(
-        '❌ Token không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại nhé Mikey!',
+        'Invalid token or has been expired, please log in again',
       );
     }
 
-    // 🌟 CHUẨN CHỈ: Trả về một thực thể đã được định kiểu rõ ràng, sạch bóng lỗi unsafe-return
     return user;
   }
 }

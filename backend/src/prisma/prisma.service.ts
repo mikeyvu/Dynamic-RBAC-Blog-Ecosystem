@@ -38,9 +38,7 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
     const url = process.env.DATABASE_URL;
 
     if (!url || url.trim() === '') {
-      throw new Error(
-        '❌ [Prisma] DATABASE_URL chưa được cấu hình trong file .env!',
-      );
+      throw new Error('[Prisma] DATABASE_URL is not defined in .env file!');
     }
 
     this.client = new PrismaClient({

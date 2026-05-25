@@ -8,6 +8,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { Post } from "@/types/post";
@@ -25,31 +28,39 @@ export default function DashboardPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [postLoading, setPostsLoading] = useState(true);
 
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+  const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+  const [formTitle, setFormTitle] = useState("");
+  const [formContent, setFormContent] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
   // Sync hydration state
   useEffect(() => {
     setMounted(true); // Only runs after the component has mounted on the client
   }, []);
 
-  // Fetch posts from NestJS Backend
-  useEffect(() => {
-    const fetchPosts = async () => {
-      if (!mounted || !user) return;
-      try {
-        setPostsLoading(true);
-        const response = await api.get('/posts');
-        setPosts(response.data);
-      } catch (err: unknown) {
-        let errorMsg = 'Failed to load posts!';
-        if (axios.isAxiosError(err)) {
-          errorMsg = err.response?.data?.message || errorMsg;
-        }
-        toast.error(errorMsg);
-      } finally {
-        setPostsLoading(false);
+  // Fetch posts từ NestJS Backend
+  const fetchPosts = async () => {
+    try {
+      setPostsLoading(true);
+      const response = await api.get("/posts");
+      setPosts(response.data);
+    } catch (err: unknown) {
+      let errorMsg = "Failed to load posts!";
+      if (axios.isAxiosError(err)) {
+        errorMsg = err.response?.data?.message || errorMsg;
       }
-    };
+      toast.error(errorMsg);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
 
-    fetchPosts();
+  useEffect(() => {
+    if (mounted && user) {
+      fetchPosts();
+    }
   }, [mounted, user]);
 
   //Check if loading does not have user -> kick back to login page
@@ -71,11 +82,76 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  const loggedInUserId = user.userId;
+  const loggedInUserId = Number(user.userId);
+  const yourPosts = posts.filter((post) => post.authorId === loggedInUserId);
+  const otherPosts = posts.filter((post) => post.authorId !== loggedInUserId);
 
-  const yourPosts = posts.filter(post => post.authorId == loggedInUserId);
-  const otherPosts = posts.filter(post => post.authorId !== loggedInUserId);
+  // Open modal in create mode
+  const openCreateModal = () => {
+    setDialogMode("create");
+    setFormTitle("");
+    setFormContent("");
+    setIsDialogOpen(true);
+  };
 
+  // Open modal in edit mode(insert original data from the old post)
+  const openEditModal = (post: Post) => {
+    setDialogMode("edit");
+    setSelectedPostId(post.id);
+    setFormTitle(post.title);
+    setFormContent(post.content);
+    setIsDialogOpen(true);
+  };
+
+  // Handle Form Submission(create or update)
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formTitle.trim() || !formContent.trim()) {
+      toast.error("Please fill in all fields!");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      if (dialogMode === "create") {
+        // Send post create request to backend
+        await api.post("/posts", { title: formTitle, content: formContent });
+        toast.success("Created new post successfully!");
+      } else if (dialogMode === "edit" && selectedPostId) {
+        // Send post update request to backend
+        await api.patch(`/posts/${selectedPostId}`, { title: formTitle, content: formContent });
+        toast.success("Updated post successfully!");
+      }
+      setIsDialogOpen(false);
+      fetchPosts(); // Pull new data from database to update the dashboard
+    } catch (err: unknown) {
+      let errorMsg = "Action failed!";
+      if (axios.isAxiosError(err)) {
+        errorMsg = err.response?.data?.message || errorMsg;
+      }
+      toast.error(errorMsg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  //Handle Delete Post
+  const handleDeletePost = async (id: number) => {
+    const currentUserName = user?.email ? user.email.split("@")[0].toUpperCase() : "User";
+    if (!window.confirm(`Are you sure you want to delete this post, ${currentUserName}?`)) return;
+
+    try {
+      await api.delete(`/posts/${id}`);
+      toast.success("Deleted post successfully!");
+      fetchPosts(); // Update the new Dashboard
+    } catch (err: unknown) {
+      let errorMsg = "Failed to delete post!";
+      if (axios.isAxiosError(err)) {
+        errorMsg = err.response?.data?.message || errorMsg;
+      }
+      toast.error(errorMsg);
+    }
+  };
+  
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     router.push("/login");
@@ -109,7 +185,7 @@ export default function DashboardPage() {
         <TabsList>
           <TabsTrigger value="posts">Post Management Tab</TabsTrigger>
 
-          {/* 🌟 REQUIREMENT 1: Only Admin can see User Management Tab */}
+          {/* REQUIREMENT 1: Only Admin can see User Management Tab */}
           {isAdmin && (
             <TabsTrigger
               value="users"
@@ -130,8 +206,10 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-bold">System Articles</h2>
                 <p className="text-xs text-slate-400">Manage your contents or explore other authors' work.</p>
               </div>
-              {hasPermissions('CREATE_POST') && (
-                <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold">
+              {hasPermissions('post:create') && (
+                <Button 
+                onClick={openCreateModal} 
+                className="bg-emerald-600 hover:bg-emerald-700 font-bold">
                   ➕ Create New Post
                 </Button>
               )}
@@ -142,7 +220,7 @@ export default function DashboardPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* 🏡 NHÓM 1: YOUR POSTS (Bài viết của bạn) */}
+                {/* First Group Card: Your Post */}
                 <Card className="border-blue-100 bg-blue-50/10">
                   <CardHeader>
                     <CardTitle className="text-blue-600 flex items-center gap-2">📝 Your Posts ({yourPosts.length})</CardTitle>
@@ -162,13 +240,21 @@ export default function DashboardPage() {
                             </span>
                           </div>
                           
-                          {/* 🌟 Có toàn quyền Sửa/Xóa với bài viết của chính mình */}
+                          {/* User can create/delete the post they created */}
                           <div className="flex flex-col gap-2 ml-4">
-                            {hasPermissions('UPDATE_POST') && (
-                              <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50">✏️ Edit</Button>
+                            {hasPermissions('post:update') && (
+                              <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => openEditModal(post)}
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50">✏️ Edit</Button>
                             )}
-                            {hasPermissions('DELETE_POST') && (
-                              <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">🗑️ Delete</Button>
+                            {hasPermissions('post:delete') && (
+                              <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleDeletePost(post.id)}
+                              className="text-red-600 border-red-200 hover:bg-red-50">🗑️ Delete</Button>
                             )}
                           </div>
                         </div>
@@ -177,7 +263,7 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
 
-                {/* 🌍 NHÓM 2: OTHER POSTS (Bài viết của người khác) */}
+                {/* Second Group Card: Other People's Posts */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-slate-700 dark:text-slate-300">🌐 Other Posts ({otherPosts.length})</CardTitle>
@@ -197,7 +283,7 @@ export default function DashboardPage() {
                               <span>{new Date(post.createdAt).toLocaleDateString()}</span>
                             </div>
                           </div>
-                          {/* 🌟 Ở ĐÂY HOÀN TOÀN KHÔNG CÓ NÚT SỬA/XÓA (Read-only đúng Requirement) */}
+                          {/* Does not have edit or delete button on others' posts */}
                         </div>
                       ))
                     )}
@@ -243,6 +329,58 @@ export default function DashboardPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Dynamic Dialog Form(Modal for both Create and Edit Posts) */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <form onSubmit={handleFormSubmit}>
+            <DialogHeader>
+              <DialogTitle>
+                {dialogMode === "create" ? "✨ Create New Post" : "✏️ Edit Your Post"}
+              </DialogTitle>
+              <DialogDescription>
+                {dialogMode === "create" 
+                  ? "Publish a new article to the community ecosystem." 
+                  : "Modify your current article content here."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="title" className="text-right font-semibold">Title</Label>
+                <Input
+                  id="title"
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="Enter post title..."
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="content" className="text-right font-semibold">Content</Label>
+                <textarea
+                  id="content"
+                  value={formContent}
+                  onChange={(e) => setFormContent(e.target.value)}
+                  placeholder="Type your article content here..."
+                  className="col-span-3 flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  required
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={actionLoading} className="bg-blue-600 hover:bg-blue-700 font-bold">
+                {actionLoading ? "Processing..." : dialogMode === "create" ? "Publish Now" : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

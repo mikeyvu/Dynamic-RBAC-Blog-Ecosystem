@@ -4,12 +4,12 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 interface JwtPayload {
-  sub: number; // ID của User (thường ký dưới dạng sub)
+  userId: number;
   email: string;
   role: string | null;
-  permissions: string[]; // Mảng chuỗi các quyền hạn
-  iat?: number; // Thời gian tạo token (Issued at - tự động có)
-  exp?: number; // Thời gian hết hạn token (Expiration - tự động có)
+  permissions: string[];
+  iat?: number;
+  exp?: number;
 }
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -17,9 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     const jwtSecret = configService.get<string>('JWT_SECRET');
 
     if (!jwtSecret) {
-      throw new Error(
-        '❌ [JwtStrategy] Không tìm thấy cấu hình JWT_SECRET trong file .env!',
-      );
+      throw new Error('[JwtStrategy] Cannot find JWT_SECRET in .env! file');
     }
     super({
       // 1. Export token from header following form: Bearer <token>
@@ -33,7 +31,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   validate(payload: JwtPayload) {
     return {
-      userId: payload.sub,
+      userId: payload.userId,
       email: payload.email,
       role: payload.role,
       permissions: payload.permissions,

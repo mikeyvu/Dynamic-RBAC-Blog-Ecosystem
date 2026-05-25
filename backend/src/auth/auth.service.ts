@@ -107,23 +107,26 @@ export class AuthService {
       }
     }
 
-    // Chuyển Set về mảng chuỗi phẳng: ['post:create', 'post:update']
+    // Change set to an array
     const permissions = Array.from(permissionSet);
 
-    // Lấy tên vai trò chính (Vai trò đứng đầu trong bảng userRoles)
+    // LGet the main role (the role that stand the first in the array)
     const primaryRole = roleNames.length > 0 ? roleNames[0] : null;
 
+    //construc token with user details
     const payload = {
-      sub: user.id,
+      userId: user.id,
       email: user.email,
       role: primaryRole,
       permissions: permissions,
     };
 
+    // Sign token
     const accessToken = this.jwtService.sign(payload);
 
     const { password, ...userWithoutPassword } = user;
 
+    //Response to send to frontend
     return {
       message: 'Login Successfully!',
       access_token: accessToken,

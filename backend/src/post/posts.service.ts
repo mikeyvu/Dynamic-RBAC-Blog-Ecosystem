@@ -12,11 +12,18 @@ export class PostsService {
   constructor(private prisma: PrismaService) {}
 
   // Create new post, automatically assign the current logged in userId
-  async create(createPostDto: CreatePostDto, userId: number) {
+  async create(
+    createPostDto: CreatePostDto,
+    userId: number,
+    imageUrl: string | null,
+  ) {
+    console.log('1.Url dc truyen vao service:', imageUrl);
     return this.prisma.post.create({
       data: {
-        ...createPostDto,
+        title: createPostDto.title, // Gán thủ công tường minh
+        content: createPostDto.content, // Gán thủ công tường minh
         authorId: userId,
+        imageUrl: imageUrl,
       },
     });
   }
@@ -39,24 +46,11 @@ export class PostsService {
   }
 
   // Update Post. Declined if it's not the user's post
-  async update(
-    id: number,
-    updatePostDto: UpdatePostDto,
-    userId: number,
-    userRole: string,
-  ) {
+  async update(id: number, updatePostDto: UpdatePostDto) {
     const post = await this.prisma.post.findUnique({ where: { id } });
 
     if (!post) {
       throw new NotFoundException(`Cannot find post with id #${id}`);
-    }
-
-    // Only admin or the author can edit their posts
-    const isAdmin = userRole?.toLowerCase() === 'admin';
-    if (post.authorId !== userId && !isAdmin) {
-      throw new ForbiddenException(
-        'You do not have permission to edit this post',
-      );
     }
 
     return this.prisma.post.update({
@@ -71,14 +65,6 @@ export class PostsService {
 
     if (!post) {
       throw new NotFoundException(`Cannot find post with id #${id} to delete!`);
-    }
-
-    // Only admin or the author can delete their posts
-    const isAdmin = userRole?.toLowerCase() === 'admin';
-    if (post.authorId !== userId && !isAdmin) {
-      throw new ForbiddenException(
-        'You do not have permission to delete this post',
-      );
     }
 
     await this.prisma.post.delete({ where: { id } });

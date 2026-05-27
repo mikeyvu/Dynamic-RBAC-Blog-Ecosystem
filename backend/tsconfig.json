@@ -22,6 +22,6 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     // THÊM DÒNG NÀY VÀO ĐỂ FIX LỖI DESCRIBE
-    "types": ["jest", "node"]
+    "types": ["jest", "node", "node", "multer"]
   }
 }

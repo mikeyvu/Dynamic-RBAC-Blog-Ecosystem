@@ -4,7 +4,7 @@ import { AppService } from './app.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { PostsModule } from './post/posts.module';
-import { UserModule } from './user/users.module';
+import { UserModule } from './users/users.module';
 
 //	The root module of the application.
 @Module({

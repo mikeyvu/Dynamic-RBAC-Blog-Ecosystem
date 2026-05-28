@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   Req,
   UploadedFile,
   UploadedFiles,
@@ -70,8 +71,21 @@ export class PostsController {
   }
 
   @Get()
-  findAll() {
-    return this.postService.findAll();
+  findAll(
+    @Query('hasImage') hasImage?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    // 🌟 Đẩy toàn bộ các tham số lọc này vào trong Service để Prisma xử lý câu lệnh WHERE
+    return this.postService.findAll({
+      hasImage,
+      startDate,
+      endDate,
+      page,
+      limit,
+    });
   }
 
   @Patch(':id')

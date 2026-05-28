@@ -32,21 +32,76 @@ export class PostsService {
   }
 
   // Get all post from database, include user information and documents for frontend
-  async findAll() {
-    return this.prisma.post.findMany({
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-          },
+  async findAll(query: {
+    hasImage?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const { hasImage, startDate, endDate, page, limit } = query;
+
+    const currentPage = Math.max(Number(page) || 1, 1);
+    const perPage = Math.max(Number(limit) || 10, 1);
+    const skip = (currentPage - 1) * perPage;
+
+    // Khởi tạo object điều kiện lọc mặc định rỗng
+    const whereCondition: any = {};
+
+    // 1. Logic lọc theo khoảng ngày (Created Date Range)
+    if (startDate || endDate) {
+      whereCondition.createdAt = {};
+      if (startDate) {
+        whereCondition.createdAt.gte = new Date(startDate); // Lớn hơn hoặc bằng ngày bắt đầu
+      }
+      if (endDate) {
+        whereCondition.createdAt.lte = new Date(endDate); // Nhỏ hơn hoặc bằng ngày kết thúc
+      }
+    }
+
+    // 2. Logic lọc bài post CÓ ẢNH hoặc KHÔNG CÓ ẢNH
+    if (hasImage !== undefined) {
+      if (hasImage === 'true') {
+        // Có ảnh: tức là số lượng bản ghi quan hệ trong bảng postDocument phải > 0
+        whereCondition.documents = {
+          some: {}, // Có ít nhất 1 document liên kết
+        };
+      } else if (hasImage === 'false') {
+        // Không có ảnh: không tồn tại bất kỳ bản ghi nào trong bảng postDocument
+        whereCondition.documents = {
+          none: {}, // Không có document nào liên kết
+        };
+      }
+    }
+
+    // Thực thi query bốc data từ DB lên
+    const [totalItems, posts] = await Promise.all([
+      this.prisma.post.count({ where: whereCondition }), // Đếm tổng để tính số trang
+      this.prisma.post.findMany({
+        where: whereCondition,
+        take: perPage, // 🌟 Ép Prisma chỉ lấy đúng lượng bài chỉ định
+        skip: skip, // 🌟 Ép Prisma bỏ qua các bài của các trang trước
+        include: {
+          documents: true,
+          user: { select: { email: true } },
         },
-        documents: true, // 🌟 THÊM DÒNG NÀY: Trả kèm mảng ảnh về cho Frontend map ra giao diện
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / perPage);
+
+    // 4. Trả về cấu trúc bọc metadata phân trang xịn sò
+    return {
+      meta: {
+        totalItems,
+        itemCount: posts.length,
+        itemsPerPage: perPage,
+        totalPages,
+        currentPage,
       },
-      orderBy: {
-        createdAt: 'desc', // sort from newest post on top
-      },
-    });
+      items: posts, // Danh sách bài viết thực tế của trang đó
+    };
   }
 
   // Update Post. Handle text updates and optional new image attachment

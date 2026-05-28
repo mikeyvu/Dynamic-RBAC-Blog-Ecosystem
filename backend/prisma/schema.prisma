@@ -64,10 +64,20 @@ model Post {
   id        Int      @id @default(autoincrement())
   title     String
   content   String
-  imageUrl  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   authorId Int
   user     User @relation(fields: [authorId], references: [id])
+  documents PostDocument[]
+}
+
+model PostDocument {
+  id        Int      @id @default(autoincrement())
+  imageUrl  String   
+  createdAt DateTime @default(now())
+
+  // 🌟 Khai báo khóa ngoại nối sang bảng Post
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade) // Thêm Cascade để khi xóa Post thì ảnh tự động xóa theo
 }

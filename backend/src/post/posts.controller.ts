@@ -9,6 +9,7 @@ import {
   Post,
   Req,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -19,7 +20,7 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { RequirePermissions } from 'src/auth/decorators/permissions.decorator';
 import { PermissionGuard } from 'src/auth/guards/permissions.guard';
 import { IsAuthorGuard } from 'src/auth/guards/is-author.guard';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { extname } from 'path';
 import { diskStorage } from 'multer';
 
@@ -31,7 +32,7 @@ export class PostsController {
   @Post()
   @RequirePermissions('post:create', 'post:manage')
   @UseInterceptors(
-    FileInterceptor('image', {
+    FilesInterceptor('images', 10, {
       storage: diskStorage({
         destination: './uploads',
         filename: (req, file, callback) => {
@@ -54,18 +55,18 @@ export class PostsController {
   create(
     @Body() createPostDto: CreatePostDto,
     @Req() req: any,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    // check file ở terminal backend
-    console.log('1. FILE BẮT ĐƯỢC TỪ MULTER:', file);
-    console.log('2. DỮ LIỆU DTO TỪ BODY:', createPostDto);
-    let imageUrl: string | null = null;
-    if (file) {
-      imageUrl = `/uploads/${file.filename}`;
-    }
+    const imageFiles = (req as any).files || files; // Đảm bảo bắt trọn mảng file từ multer bóc ra
+    const imageUrls: string[] = [];
 
+    if (imageFiles && imageFiles.length > 0) {
+      imageFiles.forEach((file: Express.Multer.File) => {
+        imageUrls.push(`/uploads/${file.filename}`);
+      });
+    }
     const userId = Number(req.user.userId);
-    return this.postService.create(createPostDto, userId, imageUrl);
+    return this.postService.create(createPostDto, userId, imageUrls);
   }
 
   @Get()
@@ -86,8 +87,8 @@ export class PostsController {
   @Delete(':id')
   @UseGuards(IsAuthorGuard)
   @RequirePermissions('post:delete', 'post:manage')
-  remove(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  remove(@Param('id', ParseIntPipe) id: number) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-    return this.postService.remove(id, req.user.userId, req.user.role);
+    return this.postService.remove(id);
   }
 }

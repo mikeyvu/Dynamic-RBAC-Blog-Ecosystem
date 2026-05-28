@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -15,20 +11,27 @@ export class PostsService {
   async create(
     createPostDto: CreatePostDto,
     userId: number,
-    imageUrl: string | null,
+    imageUrls: string[],
   ) {
-    console.log('1.Url dc truyen vao service:', imageUrl);
+    console.log('1.Url dc truyen vao service:', imageUrls);
     return this.prisma.post.create({
       data: {
-        title: createPostDto.title, // Gán thủ công tường minh
-        content: createPostDto.content, // Gán thủ công tường minh
+        title: createPostDto.title,
+        content: createPostDto.content,
         authorId: userId,
-        imageUrl: imageUrl,
+        documents: {
+          createMany: {
+            data: imageUrls.map((url) => ({ imageUrl: url })),
+          },
+        },
+      },
+      include: {
+        documents: true,
       },
     });
   }
 
-  // Get all post from database, include user information for frontend to map email
+  // Get all post from database, include user information and documents for frontend
   async findAll() {
     return this.prisma.post.findMany({
       include: {
@@ -38,29 +41,46 @@ export class PostsService {
             email: true,
           },
         },
+        documents: true, // 🌟 THÊM DÒNG NÀY: Trả kèm mảng ảnh về cho Frontend map ra giao diện
       },
       orderBy: {
-        createdAt: 'desc', //sort from newest post on top
+        createdAt: 'desc', // sort from newest post on top
       },
     });
   }
 
-  // Update Post. Declined if it's not the user's post
-  async update(id: number, updatePostDto: UpdatePostDto) {
+  // Update Post. Handle text updates and optional new image attachment
+  async update(id: number, updatePostDto: UpdatePostDto, newImageUrl?: string) {
     const post = await this.prisma.post.findUnique({ where: { id } });
 
     if (!post) {
       throw new NotFoundException(`Cannot find post with id #${id}`);
     }
 
+    // Luồng xử lý update động
     return this.prisma.post.update({
       where: { id },
-      data: updatePostDto,
+      data: {
+        title: updatePostDto.title,
+        content: updatePostDto.content,
+        // 🌟 Nếu người dùng upload thêm ảnh mới khi edit, chèn thêm một bản ghi vào bảng PostDocument
+        ...(newImageUrl && {
+          documents: {
+            create: {
+              imageUrl: newImageUrl,
+            },
+          },
+        }),
+      },
+      include: {
+        documents: true, // Trả về kèm cấu trúc ảnh mới nhất sau khi sửa
+      },
     });
   }
 
-  // Delete post. Same logic with update post
-  async remove(id: number, userId: number, userRole: string) {
+  // Delete post. Since cascade delete is enabled in schema, it will auto delete related documents
+  async remove(id: number) {
+    // 🌟 SỬA DÒNG NÀY: Loại bỏ các tham số thừa trùng khớp với Controller
     const post = await this.prisma.post.findUnique({ where: { id } });
 
     if (!post) {

@@ -9,7 +9,7 @@ import * as express from 'express';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.use('./uploads', express.static(join(__dirname, '..', 'uploads')));
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   //This line make every request that enter the backend system have to go throgh the Validation pipe
   // whitelist: true will automatically delete values that were not defined in DTO
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));

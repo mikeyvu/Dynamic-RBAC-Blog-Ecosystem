@@ -43,7 +43,7 @@ export default function PostManagement({
   const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]); // 🌟 Quản lý mảng nhiều file ảnh
 
   // Fetch posts từ NestJS Backend
   const fetchPosts = async () => {
@@ -63,7 +63,6 @@ export default function PostManagement({
 
   useEffect(() => {
     if (user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchPosts();
     }
   }, [user]);
@@ -79,6 +78,7 @@ export default function PostManagement({
     setDialogMode("create");
     setFormTitle("");
     setFormContent("");
+    setSelectedFiles([]); // 🌟 Reset mảng file cũ
     setIsDialogOpen(true);
   };
 
@@ -88,6 +88,7 @@ export default function PostManagement({
     setSelectedPostId(post.id);
     setFormTitle(post.title);
     setFormContent(post.content);
+    setSelectedFiles([]); // 🌟 Reset mảng file cũ tránh xung đột dữ liệu
     setIsDialogOpen(true);
   };
 
@@ -105,14 +106,15 @@ export default function PostManagement({
       formData.append("title", formTitle);
       formData.append("content", formContent);
 
-      // If user choose image, put that file in FormData with key=image
-      if (selectedFile) {
-        formData.append("image", selectedFile);
+      // 🌟 VÁ LỖI CÚ PHÁP: Duyệt mảng để đính kèm toàn bộ ảnh với key là 'images' đồng bộ sang Backend
+      if (selectedFiles && selectedFiles.length > 0) {
+        selectedFiles.forEach((file) => {
+          formData.append("images", file);
+        });
       }
 
       if (dialogMode === "create") {
         //Post API for create new record
-        // Send API with special Content-Type for File
         await api.post("/posts", formData, {
           headers: {
             "Content-Type": "multipart/form-data", // Let Axios know there is file in the request
@@ -127,7 +129,7 @@ export default function PostManagement({
         toast.success("Updated post successfully!");
       }
       setIsDialogOpen(false);
-      setSelectedFile(null); //reset file input back to null after we done
+      setSelectedFiles([]); // 🌟 VÁ LỖI CÚ PHÁP: Clear mảng file về rỗng sau khi làm xong
       fetchPosts(); // Pull new data from database to update the dashboard
     } catch (err: unknown) {
       let errorMsg = "Action failed!";
@@ -231,16 +233,24 @@ export default function PostManagement({
                             <h4 className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                               {post.title}
                             </h4>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-2">
                               {post.content}
                             </p>
-                            {post.imageUrl && (
-                              <img
-                                src={`${BACKEND_URL}${post.imageUrl}`} // Ghép host của NestJS vào đầu URL tĩnh
-                                alt={post.title}
-                                className="w-full h-40 object-cover rounded-md mb-2 mt-1"
-                              />
+                            
+                            {/* 🌟 THAY THẾ: Render mảng nhiều ảnh từ bảng quan hệ PostDocument */}
+                            {post.documents && post.documents.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 mb-2 mt-1">
+                                {post.documents.map((doc: any) => (
+                                  <img
+                                    key={doc.id}
+                                    src={`${BACKEND_URL}${doc.imageUrl}`}
+                                    alt="Attachment"
+                                    className="w-full h-28 object-cover rounded-md"
+                                  />
+                                ))}
+                              </div>
                             )}
+
                             <span className="text-[10px] text-slate-400 block pt-1">
                               {new Date(post.createdAt).toLocaleDateString(
                                 undefined,
@@ -318,16 +328,24 @@ export default function PostManagement({
                             <h4 className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                               {post.title}
                             </h4>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-2">
                               {post.content}
                             </p>
-                            {post.imageUrl && (
-                              <img
-                                src={`${BACKEND_URL}${post.imageUrl}`} // Ghép host của NestJS vào đầu URL tĩnh
-                                alt={post.title}
-                                className="w-full h-40 object-cover rounded-md mb-2 mt-1"
-                              />
+
+                            {/* 🌟 THAY THẾ: Render mảng nhiều ảnh cho phần Community Posts */}
+                            {post.documents && post.documents.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 mb-2 mt-1">
+                                {post.documents.map((doc: any) => (
+                                  <img
+                                    key={doc.id}
+                                    src={`${BACKEND_URL}${doc.imageUrl}`}
+                                    alt="Attachment"
+                                    className="w-full h-28 object-cover rounded-md"
+                                  />
+                                ))}
+                              </div>
                             )}
+
                             <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 mt-1 border-t border-slate-100">
                               <span className="font-medium">
                                 {post.user?.email?.split("@")[0] ||
@@ -425,15 +443,17 @@ export default function PostManagement({
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="image" className="text-right font-semibold">
-                  Cover Image
+                  Post Images
                 </Label>
                 <Input
                   id="image"
                   type="file"
                   accept="image/*" // Only show image file when select
+                  multiple // 🌟 Giữ cờ này để chọn nhiều ảnh cùng lúc
                   onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setSelectedFile(e.target.files[0]); // Save file to state
+                    if (e.target.files) {
+                      // 🌟 VÁ LỖI CÚ PHÁP: Chuyển đổi FileList thành Array để đẩy vào State mảng
+                      setSelectedFiles(Array.from(e.target.files));
                     }
                   }}
                   className="col-span-3 cursor-pointer"
